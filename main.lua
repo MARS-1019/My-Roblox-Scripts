@@ -23,6 +23,7 @@ local Config = {
     ESP_Health = false,
     Fly = false,
     FlySpeed = 50,
+    Noclip = false, -- [新增] 人物穿牆配置
     MenuKey = Enum.KeyCode.Insert
 }
 
@@ -60,11 +61,16 @@ Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 Main.Active = true; Main.Draggable = true
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
 
+-- [新增] 標題
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 40); Title.Text = "MARS HUB V2 PRIVATE"; Title.TextColor3 = Color3.new(1,1,1)
+Title.Font = Enum.Font.GothamBold; Title.BackgroundTransparency = 1
+
 local Container = Instance.new("ScrollingFrame", Main)
 Container.Size = UDim2.new(1, -20, 1, -60)
 Container.Position = UDim2.new(0, 10, 0, 50)
 Container.BackgroundTransparency = 1
-Container.CanvasSize = UDim2.new(0, 0, 2.5, 0)
+Container.CanvasSize = UDim2.new(0, 0, 4, 0) -- 增加長度以容納 TP 列表
 Container.ScrollBarThickness = 0
 Instance.new("UIListLayout", Container).Padding = UDim.new(0, 8)
 
@@ -113,6 +119,7 @@ end
 AddButton("🚀 BOOST FPS (提升幀數)", function() BoostFPS() end)
 AddToggle("Silent Lock", "Aimbot")
 AddToggle("Wall Check", "WallCheck")
+AddToggle("Noclip (人物穿牆)", "Noclip") -- [新增]
 AddToggle("Show FOV", "ShowFOV")
 AddSlider("Aimbot FOV", 50, 1000, "FOV")
 AddToggle("ESP Box", "ESP_Box")
@@ -121,6 +128,32 @@ AddToggle("ESP Health", "ESP_Health")
 AddToggle("ESP Snaplines", "ESP_Tracer")
 AddToggle("Fly Mode", "Fly")
 AddSlider("Fly Speed", 10, 500, "FlySpeed")
+
+-- [[ 新增：玩家 TP 列表邏輯 ]] --
+local TPTitle = Instance.new("TextLabel", Container)
+TPTitle.Size = UDim2.new(1, 0, 0, 30); TPTitle.Text = "--- PLAYER TELEPORT ---"; TPTitle.TextColor3 = Color3.new(1, 0.8, 0); TPTitle.BackgroundTransparency = 1
+
+local TPListFrame = Instance.new("Frame", Container)
+TPListFrame.Size = UDim2.new(1, 0, 0, 0); TPListFrame.BackgroundTransparency = 1
+local TPListLayout = Instance.new("UIListLayout", TPListFrame); TPListLayout.Padding = UDim.new(0, 5)
+
+local function RefreshTP()
+    for _, v in pairs(TPListFrame:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+    for _, player in pairs(p:GetPlayers()) do
+        if player ~= lp then
+            local b = Instance.new("TextButton", TPListFrame)
+            b.Size = UDim2.new(1, 0, 0, 25); b.BackgroundColor3 = Color3.fromRGB(45, 20, 20); b.Text = "TP TO: " .. player.DisplayName
+            b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.Gotham; Instance.new("UICorner", b)
+            b.MouseButton1Click:Connect(function()
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    lp.Character:SetPrimaryPartCFrame(player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3))
+                end
+            end)
+        end
+    end
+    TPListFrame.Size = UDim2.new(1, 0, 0, #TPListFrame:GetChildren() * 30)
+end
+AddButton("🔄 REFRESH PLAYER TP LIST", RefreshTP)
 
 -- [[ 超絲滑 ESP 渲染系統 ]] --
 local function CreateESP(target)
@@ -131,7 +164,6 @@ local function CreateESP(target)
     local nm = Drawing.new("Text")
     local hp = Drawing.new("Text")
     
-    -- 初始化繪圖屬性（避免在循環中重複賦值）
     b.Thickness = 1; b.Filled = false; b.Transparency = 1
     t.Thickness = 1; t.Transparency = 1
     nm.Size = 13; nm.Center = true; nm.Outline = true; nm.Font = 2
@@ -142,16 +174,14 @@ local function CreateESP(target)
         local char = target.Character
         local cam = workspace.CurrentCamera
         
-        -- 檢查玩家效度
         if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
             local root = char.HumanoidRootPart
             local pos, on = cam:WorldToViewportPoint(root.Position)
             
             if on then
                 local size = 2500 / pos.Z
-                local lerpSpeed = 0.8 -- 插值速度（1為瞬間移動，數值越小越順滑但會有延遲感）
+                local lerpSpeed = 0.8 
                 
-                -- 方框更新
                 if Config.ESP_Box then
                     b.Visible = true
                     b.Size = b.Size:Lerp(Vector2.new(size, size * 1.5), lerpSpeed)
@@ -159,7 +189,6 @@ local function CreateESP(target)
                     b.Color = Color3.new(1,1,1)
                 else b.Visible = false end
                 
-                -- 連接線更新
                 if Config.ESP_Tracer then
                     t.Visible = true
                     t.From = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y)
@@ -167,7 +196,6 @@ local function CreateESP(target)
                     t.Color = Color3.new(1,1,1)
                 else t.Visible = false end
                 
-                -- 名字更新
                 if Config.ESP_Name then
                     nm.Visible = true
                     nm.Text = target.Name
@@ -175,7 +203,6 @@ local function CreateESP(target)
                     nm.Color = Color3.new(1,1,1)
                 else nm.Visible = false end
                 
-                -- 血量更新
                 if Config.ESP_Health then
                     hp.Visible = true
                     local h = char.Humanoid.Health
@@ -188,10 +215,8 @@ local function CreateESP(target)
             end
         end
         
-        -- 不在螢幕內或死亡時隱藏
         b.Visible = false; t.Visible = false; nm.Visible = false; hp.Visible = false
         
-        -- 如果玩家離開則斷開連接
         if not target.Parent then
             b:Remove(); t:Remove(); nm:Remove(); hp:Remove()
             connection:Disconnect()
@@ -199,8 +224,21 @@ local function CreateESP(target)
     end)
 end
 
--- [[ 主循環（保持不動） ]] --
+-- [[ 主循環 ]] --
 task.spawn(function()
+    r.Stepped:Connect(function() -- 使用 Stepped 處理 Noclip 最穩定
+        pcall(function()
+            -- [新增] 人物穿牆邏輯
+            if Config.Noclip and lp.Character then
+                for _, v in pairs(lp.Character:GetDescendants()) do
+                    if v:IsA("BasePart") and v.CanCollide then
+                        v.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end)
+
     while ScreenGui.Parent do
         local cam = workspace.CurrentCamera
         pcall(function()

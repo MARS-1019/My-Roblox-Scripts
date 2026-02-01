@@ -2,8 +2,8 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
    Name = "Mars Hub | Rivals ULTIMATE",
-   LoadingTitle = "Mars Premium Systems Loading...",
-   LoadingSubtitle = "by Gemini Editor",
+   LoadingTitle = "Mars Systems Loading...",
+   LoadingSubtitle = "Aimbot + ESP + Fly Edition",
    ConfigurationSaving = {
       Enabled = true,
       FolderName = "MarsConfig",
@@ -21,17 +21,18 @@ _G.ESP_Enabled = false
 _G.ESP_Box = false
 _G.ESP_Name = false
 _G.ESP_HealthBar = false
-_G.ESP_HealthText = false
 _G.ESP_Tracer = false
+
+_G.FlyEnabled = false
+_G.FlySpeed = 50
 
 local p = game:GetService("Players")
 local lp = p.LocalPlayer
 local r = game:GetService("RunService")
 local u = game:GetService("UserInputService")
 local c = workspace.CurrentCamera
-local lighting = game:GetService("Lighting")
 
--- [[ FOV 圓圈渲染 ]] --
+-- [[ FOV 渲染 ]] --
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 1
 FOVCircle.Color = Color3.fromRGB(0, 255, 255)
@@ -41,8 +42,7 @@ FOVCircle.Transparency = 0.7
 -- [[ UI 標籤頁面 ]] --
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local VisualTab = Window:CreateTab("Visuals", 4483345998)
-local SkinTab = Window:CreateTab("Skins", 11293237142)
-local PerfTab = Window:CreateTab("Performance", 4370345144)
+local MovementTab = Window:CreateTab("Movement", 4483362748)
 
 -- [[ 1. Combat (戰鬥系統) ]] --
 CombatTab:CreateSection("Aimbot Settings")
@@ -71,102 +71,49 @@ CombatTab:CreateDropdown({
    Callback = function(v) _G.LockPart = v end,
 })
 
--- [[ 2. Visuals (全功能透視) ]] --
-VisualTab:CreateSection("ESP Master Switch")
+-- [[ 2. Visuals (透視) ]] --
+VisualTab:CreateSection("ESP Settings")
 VisualTab:CreateToggle({
    Name = "Enable Visuals",
    CurrentValue = false,
    Callback = function(v) _G.ESP_Enabled = v end,
 })
-VisualTab:CreateSection("Options")
 VisualTab:CreateToggle({ Name = "Boxes", CurrentValue = false, Callback = function(v) _G.ESP_Box = v end })
 VisualTab:CreateToggle({ Name = "Names", CurrentValue = false, Callback = function(v) _G.ESP_Name = v end })
 VisualTab:CreateToggle({ Name = "Health Bars", CurrentValue = false, Callback = function(v) _G.ESP_HealthBar = v end })
-VisualTab:CreateToggle({ Name = "Health Numbers", CurrentValue = false, Callback = function(v) _G.ESP_HealthText = v end })
-VisualTab:CreateToggle({ Name = "Snaplines (Tracers)", CurrentValue = false, Callback = function(v) _G.ESP_Tracer = v end })
+VisualTab:CreateToggle({ Name = "Snaplines", CurrentValue = false, Callback = function(v) _G.ESP_Tracer = v end })
 
--- [[ 3. Skins (皮膚解鎖) ]] --
-SkinTab:CreateSection("Local Skin Unlocker")
-SkinTab:CreateParagraph({Title = "Instructions", Content = "Click spoofing then check your locker. Note: This is client-side only."})
-
-SkinTab:CreateButton({
-   Name = "Unlock All Skins (Spoof Owned)",
-   Callback = function()
-       local count = 0
-       -- 掃描全域 Boolean 數值
-       for _, v in pairs(game:GetDescendants()) do
-           if (v.Name == "Owned" or v.Name == "Unlocked") and v:IsA("BoolValue") then
-               v.Value = true
-               count = count + 1
-           end
-       end
-       -- 掃描 ModuleScripts 配置
-       for _, mod in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-           if mod:IsA("ModuleScript") and (mod.Name:find("Skin") or mod.Name:find("Config")) then
-               pcall(function()
-                   local table_ = require(mod)
-                   if type(table_) == "table" then
-                       for i, val in pairs(table_) do
-                           if i == "IsOwned" or i == "Unlocked" then table_[i] = true end
-                       end
-                   end
-               end)
-           end
-       end
-       Rayfield:Notify({Title = "Skins", Content = "Spoofing complete. Found: " .. tostring(count), Duration = 3})
+-- [[ 3. Movement (飛行功能) ]] --
+MovementTab:CreateSection("Flight Controls")
+MovementTab:CreateToggle({
+   Name = "Fly Mode",
+   CurrentValue = false,
+   Callback = function(v) 
+      _G.FlyEnabled = v 
+      if not v then
+         -- 關閉飛行時重置重力與速度
+         if lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+            lp.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+         end
+      end
    end,
 })
-
-SkinTab:CreateButton({
-   Name = "Gold Weapon Visuals",
-   Callback = function()
-       for _, v in pairs(game:GetDescendants()) do
-           if v:IsA("MeshPart") or v:IsA("Part") then
-               if v.Parent:IsA("Model") and (v.Parent.Name:find("Gun") or v.Parent.Name:find("Weapon")) then
-                   v.Material = Enum.Material.Neon
-                   v.Color = Color3.fromRGB(255, 215, 0)
-               end
-           end
-       end
-   end,
+MovementTab:CreateSlider({
+   Name = "Fly Speed",
+   Range = {10, 300},
+   Increment = 5,
+   Suffix = " Speed",
+   CurrentValue = 50,
+   Callback = function(v) _G.FlySpeed = v end,
 })
 
--- [[ 4. Performance (極致性能優化) ]] --
-PerfTab:CreateSection("FPS Boost")
-PerfTab:CreateButton({
-   Name = "Ultra Low GFX (No Textures / Smooth)",
-   Callback = function()
-       for _, v in pairs(game:GetDescendants()) do
-           if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("UnionOperation") then
-               v.Material = Enum.Material.SmoothPlastic
-               v.Reflectance = 0
-               if v:IsA("MeshPart") then v.TextureID = "" end
-           elseif v:IsA("Decal") or v:IsA("Texture") then
-               v:Destroy()
-           elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-               v.Enabled = false
-           end
-       end
-       lighting.GlobalShadows = false
-       settings().Rendering.QualityLevel = 1
-       Rayfield:Notify({Title = "Success", Content = "Everything is now Smooth Plastic.", Duration = 3})
-   end,
-})
-PerfTab:CreateButton({
-   Name = "Unlock FPS (999 Cap)",
-   Callback = function()
-       if setfpscap then setfpscap(999) 
-       Rayfield:Notify({Title = "FPS", Content = "FPS Unlocked!", Duration = 3})
-       else Rayfield:Notify({Title = "Error", Content = "Executor not supported.", Duration = 3}) end
-   end,
-})
+-- [[ 核心功能邏輯 ]] --
 
--- [[ 核心循環與功能函數 ]] --
-
+-- ESP 函數
 local function CreateESP(player)
     if player == lp then return end
     local box = Drawing.new("Square"); local line = Drawing.new("Line"); local name = Drawing.new("Text")
-    local healthTxt = Drawing.new("Text"); local healthBarBg = Drawing.new("Square"); local healthBar = Drawing.new("Square")
+    local healthBarBg = Drawing.new("Square"); local healthBar = Drawing.new("Square")
     
     r.RenderStepped:Connect(function()
         local char = player.Character
@@ -184,19 +131,36 @@ local function CreateESP(player)
                 local hpPercent = hum.Health / hum.MaxHealth
                 healthBarBg.Visible = _G.ESP_HealthBar; healthBarBg.Size = Vector2.new(5, height); healthBarBg.Position = Vector2.new(x - 7, y); healthBarBg.Filled = true; healthBarBg.Color = Color3.new(0,0,0)
                 healthBar.Visible = _G.ESP_HealthBar; healthBar.Size = Vector2.new(3, height * hpPercent); healthBar.Position = Vector2.new(x - 6, y + (height * (1 - hpPercent))); healthBar.Filled = true; healthBar.Color = Color3.fromHSV(hpPercent * 0.3, 1, 1)
-                healthTxt.Visible = _G.ESP_HealthText; healthTxt.Text = tostring(math.floor(hum.Health)); healthTxt.Position = Vector2.new(x - 30, y + (height * (1 - hpPercent))); healthTxt.Outline = true
                 return
             end
         end
-        box.Visible = false; line.Visible = false; name.Visible = false; healthBar.Visible = false; healthBarBg.Visible = false; healthTxt.Visible = false
+        box.Visible = false; line.Visible = false; name.Visible = false; healthBar.Visible = false; healthBarBg.Visible = false
     end)
 end
 
+-- 飛行與自瞄循環
 r.RenderStepped:Connect(function()
+    -- FOV 更新
     FOVCircle.Visible = _G.ShowFOV
     FOVCircle.Radius = _G.FOV
     FOVCircle.Position = u:GetMouseLocation()
 
+    -- 飛行邏輯
+    if _G.FlyEnabled and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = lp.Character.HumanoidRootPart
+        local moveDir = Vector3.new(0,0,0)
+        
+        if u:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + c.CFrame.LookVector end
+        if u:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - c.CFrame.LookVector end
+        if u:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - c.CFrame.RightVector end
+        if u:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + c.CFrame.RightVector end
+        if u:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+        if u:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0,1,0) end
+        
+        hrp.Velocity = moveDir * _G.FlySpeed
+    end
+
+    -- 自瞄邏輯
     if _G.Aimbot and u:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local target = nil; local minDist = _G.FOV; local mPos = u:GetMouseLocation()
         for _, v in pairs(p:GetPlayers()) do
@@ -218,4 +182,4 @@ end)
 p.PlayerAdded:Connect(CreateESP)
 for _, v in pairs(p:GetPlayers()) do CreateESP(v) end
 
-Rayfield:Notify({Title = "Mars Hub Loaded", Content = "Ultimate Version 4.0", Duration = 5})
+Rayfield:Notify({Title = "Mars Hub Loaded", Content = "Aimbot & Fly Ready!", Duration = 5})

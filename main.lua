@@ -1,4 +1,4 @@
--- [[ 守護進程 ]] --
+-- [[ MARS HUB V2 - FULL OFFSETS & HEAD SIT EDITION ]] --
 if _G.MarsLoaded then 
     local old = game:GetService("CoreGui"):FindFirstChild("MarsHub_V2")
     if old then old:Destroy() end
@@ -10,6 +10,7 @@ local lp = p.LocalPlayer
 local r = game:GetService("RunService")
 local u = game:GetService("UserInputService")
 local cg = game:GetService("CoreGui")
+local cam = workspace.CurrentCamera
 
 local Config = {
     Aimbot = false,
@@ -18,19 +19,25 @@ local Config = {
     LockPart = "Head",
     ShowFOV = false,
     ESP_Box = false,
-    ESP_Tracer = false,
     ESP_Name = false,
     ESP_Health = false,
     Fly = false,
     FlySpeed = 50,
-    Noclip = false, -- [新增] 人物穿牆配置
+    Noclip = false,
+    TPAura = false,
+    -- 偏移量設定
+    Off_X = 0, -- 左右
+    Off_Y = 4, -- 高度
+    Off_Z = 0, -- 前後
     MenuKey = Enum.KeyCode.Insert
 }
 
--- [[ FPS 優化函數 ]] --
+local CurrentTarget = nil
+local TargetIndex = 0
+
+-- [[ 1. FPS 優化 ]] --
 local function BoostFPS()
-    local settings = settings()
-    settings.Rendering.QualityLevel = Enum.QualityLevel.Level01
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
     for _, v in pairs(game:GetDescendants()) do
         if v:IsA("Part") or v:IsA("UnionOperation") or v:IsA("MeshPart") then
             v.Material = Enum.Material.SmoothPlastic
@@ -43,239 +50,162 @@ local function BoostFPS()
     end
     workspace.Terrain.WaterWaveSize = 0
     workspace.Terrain.WaterWaveSpeed = 0
-    workspace.Terrain.WaterReflectance = 0
-    workspace.Terrain.WaterTransparency = 0
     game:GetService("Lighting").GlobalShadows = false
-    game:GetService("Lighting").FogEnd = 9e9
 end
 
--- [[ UI 介面 ]] --
-local ScreenGui = Instance.new("ScreenGui", cg)
-ScreenGui.Name = "MarsHub_V2"
-ScreenGui.ResetOnSpawn = false
+-- [[ 2. 目標獲取邏輯 ]] --
+local function GetNextTarget()
+    local targetList = {}
+    for _, v in pairs(p:GetPlayers()) do
+        if v ~= lp and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character.Humanoid.Health > 0 then
+            table.insert(targetList, v)
+        end
+    end
+    if #targetList == 0 then return nil end
+    TargetIndex = (TargetIndex % #targetList) + 1
+    return targetList[TargetIndex]
+end
 
+-- [[ 3. UI 介面核心 ]] --
+local ScreenGui = Instance.new("ScreenGui", cg); ScreenGui.Name = "MarsHub_V2"
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 250, 0, 500)
-Main.Position = UDim2.new(0.1, 0, 0.2, 0)
-Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-Main.Active = true; Main.Draggable = true
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
+Main.Size = UDim2.new(0, 260, 0, 550); Main.Position = UDim2.new(0.1, 0, 0.2, 0); Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15); Main.Active = true; Main.Draggable = true
+Instance.new("UICorner", Main)
 
--- [新增] 標題
-local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1, 0, 0, 40); Title.Text = "MARS HUB V2 PRIVATE"; Title.TextColor3 = Color3.new(1,1,1)
-Title.Font = Enum.Font.GothamBold; Title.BackgroundTransparency = 1
-
-local Container = Instance.new("ScrollingFrame", Main)
-Container.Size = UDim2.new(1, -20, 1, -60)
-Container.Position = UDim2.new(0, 10, 0, 50)
-Container.BackgroundTransparency = 1
-Container.CanvasSize = UDim2.new(0, 0, 4, 0) -- 增加長度以容納 TP 列表
-Container.ScrollBarThickness = 0
+local Container = Instance.new("ScrollingFrame", Main); Container.Size = UDim2.new(1, -20, 1, -60); Container.Position = UDim2.new(0, 10, 0, 50); Container.BackgroundTransparency = 1; Container.CanvasSize = UDim2.new(0, 0, 2.5, 0); Container.ScrollBarThickness = 0
 Instance.new("UIListLayout", Container).Padding = UDim.new(0, 8)
 
 local function AddToggle(text, configKey)
-    local Btn = Instance.new("TextButton", Container)
-    Btn.Size = UDim2.new(1, 0, 0, 30); Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-    Btn.Text = text .. ": OFF"; Btn.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-    Btn.Font = Enum.Font.Gotham; Btn.TextSize = 13
-    Instance.new("UICorner", Btn)
+    local Btn = Instance.new("TextButton", Container); Btn.Size = UDim2.new(1, 0, 0, 30); Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 40); Btn.Text = text .. ": OFF"; Btn.TextColor3 = Color3.new(0.8, 0.8, 0.8); Btn.Font = Enum.Font.Gotham; Instance.new("UICorner", Btn)
     Btn.MouseButton1Click:Connect(function()
         Config[configKey] = not Config[configKey]
         Btn.Text = text .. ": " .. (Config[configKey] and "ON" or "OFF")
-        Btn.BackgroundColor3 = Config[configKey] and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(35, 35, 40)
+        Btn.BackgroundColor3 = Config[configKey] and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(35, 35, 40)
     end)
-end
-
-local function AddButton(text, callback)
-    local Btn = Instance.new("TextButton", Container)
-    Btn.Size = UDim2.new(1, 0, 0, 30); Btn.BackgroundColor3 = Color3.fromRGB(60, 30, 90)
-    Btn.Text = text; Btn.TextColor3 = Color3.new(1, 1, 1)
-    Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13
-    Instance.new("UICorner", Btn)
-    Btn.MouseButton1Click:Connect(callback)
 end
 
 local function AddSlider(text, min, max, configKey)
     local Frame = Instance.new("Frame", Container); Frame.Size = UDim2.new(1, 0, 0, 45); Frame.BackgroundTransparency = 1
-    local Label = Instance.new("TextLabel", Frame); Label.Size = UDim2.new(1, 0, 0, 15); Label.Text = text .. ": " .. Config[configKey]; Label.TextColor3 = Color3.new(1, 1, 1); Label.BackgroundTransparency = 1
+    local Label = Instance.new("TextLabel", Frame); Label.Size = UDim2.new(1, 0, 0, 15); Label.Text = text .. ": " .. Config[configKey]; Label.TextColor3 = Color3.new(1, 1, 1); Label.BackgroundTransparency = 1; Label.Font = Enum.Font.Code
     local SliderBG = Instance.new("Frame", Frame); SliderBG.Size = UDim2.new(1, 0, 0, 8); SliderBG.Position = UDim2.new(0, 0, 0, 25); SliderBG.BackgroundColor3 = Color3.fromRGB(30,30,30)
-    local Bar = Instance.new("Frame", SliderBG); Bar.Size = UDim2.new((Config[configKey]-min)/(max-min),0,1,0); Bar.BackgroundColor3 = Color3.fromRGB(0, 150, 0); Bar.BorderSizePixel = 0
-    SliderBG.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            local con; con = u.InputChanged:Connect(function(i2)
-                if i2.UserInputType == Enum.UserInputType.MouseMovement then
-                    local rel = math.clamp((u:GetMouseLocation().X - SliderBG.AbsolutePosition.X)/SliderBG.AbsoluteSize.X, 0, 1)
-                    Config[configKey] = math.floor(min + (max-min)*rel)
-                    Label.Text = text .. ": " .. Config[configKey]
-                    Bar.Size = UDim2.new(rel, 0, 1, 0)
-                end
-            end)
-            u.InputEnded:Connect(function(i3) if i3.UserInputType == Enum.UserInputType.MouseButton1 then con:Disconnect() end end)
-        end
-    end)
+    local Bar = Instance.new("Frame", SliderBG); Bar.Size = UDim2.new((Config[configKey]-min)/(max-min),0,1,0); Bar.BackgroundColor3 = Color3.fromRGB(0, 255, 150); Bar.BorderSizePixel = 0
+    SliderBG.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then local con; con = u.InputChanged:Connect(function(i2) if i2.UserInputType == Enum.UserInputType.MouseMovement then local rel = math.clamp((u:GetMouseLocation().X - SliderBG.AbsolutePosition.X)/SliderBG.AbsoluteSize.X, 0, 1); Config[configKey] = math.floor(min + (max-min)*rel); Label.Text = text .. ": " .. Config[configKey]; Bar.Size = UDim2.new(rel, 0, 1, 0) end end); u.InputEnded:Connect(function(i3) if i3.UserInputType == Enum.UserInputType.MouseButton1 then con:Disconnect() end end) end end)
 end
 
-AddButton("🚀 BOOST FPS (提升幀數)", function() BoostFPS() end)
-AddToggle("Silent Lock", "Aimbot")
+local function AddButton(text, callback)
+    local Btn = Instance.new("TextButton", Container); Btn.Size = UDim2.new(1, 0, 0, 30); Btn.BackgroundColor3 = Color3.fromRGB(60, 30, 90); Btn.Text = text; Btn.TextColor3 = Color3.new(1, 1, 1); Btn.Font = Enum.Font.GothamBold; Instance.new("UICorner", Btn)
+    Btn.MouseButton1Click:Connect(callback)
+end
+
+-- UI 功能元件
+AddButton("🚀 BOOST FPS", BoostFPS)
+AddToggle("TP AURA (全方位貼身)", "TPAura")
+AddSlider("左右偏移 (L/R)", -10, 10, "Off_X")
+AddSlider("高度偏移 (Up/Down)", -10, 10, "Off_Y")
+AddSlider("前後偏移 (F/B)", -10, 10, "Off_Z")
+AddToggle("Noclip (穿牆必開)", "Noclip")
+AddToggle("Silent Lock (瞄準)", "Aimbot")
 AddToggle("Wall Check", "WallCheck")
-AddToggle("Noclip (人物穿牆)", "Noclip") -- [新增]
+AddSlider("Aimbot FOV", 50, 800, "FOV")
 AddToggle("Show FOV", "ShowFOV")
-AddSlider("Aimbot FOV", 50, 1000, "FOV")
 AddToggle("ESP Box", "ESP_Box")
 AddToggle("ESP Name", "ESP_Name")
 AddToggle("ESP Health", "ESP_Health")
-AddToggle("ESP Snaplines", "ESP_Tracer")
 AddToggle("Fly Mode", "Fly")
 AddSlider("Fly Speed", 10, 500, "FlySpeed")
 
--- [[ 新增：玩家 TP 列表邏輯 ]] --
-local TPTitle = Instance.new("TextLabel", Container)
-TPTitle.Size = UDim2.new(1, 0, 0, 30); TPTitle.Text = "--- PLAYER TELEPORT ---"; TPTitle.TextColor3 = Color3.new(1, 0.8, 0); TPTitle.BackgroundTransparency = 1
+local Tip = Instance.new("TextLabel", Container); Tip.Size = UDim2.new(1, 0, 0, 40); Tip.Text = "按 [Q] 切換目標\n按 [Insert] 隱藏菜單"; Tip.TextColor3 = Color3.new(1, 1, 0); Tip.BackgroundTransparency = 1
 
-local TPListFrame = Instance.new("Frame", Container)
-TPListFrame.Size = UDim2.new(1, 0, 0, 0); TPListFrame.BackgroundTransparency = 1
-local TPListLayout = Instance.new("UIListLayout", TPListFrame); TPListLayout.Padding = UDim.new(0, 5)
-
-local function RefreshTP()
-    for _, v in pairs(TPListFrame:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
-    for _, player in pairs(p:GetPlayers()) do
-        if player ~= lp then
-            local b = Instance.new("TextButton", TPListFrame)
-            b.Size = UDim2.new(1, 0, 0, 25); b.BackgroundColor3 = Color3.fromRGB(45, 20, 20); b.Text = "TP TO: " .. player.DisplayName
-            b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.Gotham; Instance.new("UICorner", b)
-            b.MouseButton1Click:Connect(function()
-                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    lp.Character:SetPrimaryPartCFrame(player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3))
-                end
-            end)
-        end
+-- [[ 4. 核心功能循環 ]] --
+r.Stepped:Connect(function()
+    if Config.Noclip and lp.Character then
+        for _, v in pairs(lp.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
-    TPListFrame.Size = UDim2.new(1, 0, 0, #TPListFrame:GetChildren() * 30)
-end
-AddButton("🔄 REFRESH PLAYER TP LIST", RefreshTP)
 
--- [[ 超絲滑 ESP 渲染系統 ]] --
-local function CreateESP(target)
-    if target == lp then return end
-    
-    local b = Drawing.new("Square")
-    local t = Drawing.new("Line")
-    local nm = Drawing.new("Text")
-    local hp = Drawing.new("Text")
-    
-    b.Thickness = 1; b.Filled = false; b.Transparency = 1
-    t.Thickness = 1; t.Transparency = 1
-    nm.Size = 13; nm.Center = true; nm.Outline = true; nm.Font = 2
-    hp.Size = 13; hp.Center = true; hp.Outline = true; hp.Font = 2
-
-    local connection
-    connection = r.RenderStepped:Connect(function()
-        local char = target.Character
-        local cam = workspace.CurrentCamera
-        
-        if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-            local root = char.HumanoidRootPart
-            local pos, on = cam:WorldToViewportPoint(root.Position)
-            
-            if on then
-                local size = 2500 / pos.Z
-                local lerpSpeed = 0.8 
-                
-                if Config.ESP_Box then
-                    b.Visible = true
-                    b.Size = b.Size:Lerp(Vector2.new(size, size * 1.5), lerpSpeed)
-                    b.Position = b.Position:Lerp(Vector2.new(pos.X - size/2, pos.Y - size/2), lerpSpeed)
-                    b.Color = Color3.new(1,1,1)
-                else b.Visible = false end
-                
-                if Config.ESP_Tracer then
-                    t.Visible = true
-                    t.From = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y)
-                    t.To = t.To:Lerp(Vector2.new(pos.X, pos.Y + (size*0.75)), lerpSpeed)
-                    t.Color = Color3.new(1,1,1)
-                else t.Visible = false end
-                
-                if Config.ESP_Name then
-                    nm.Visible = true
-                    nm.Text = target.Name
-                    nm.Position = nm.Position:Lerp(Vector2.new(pos.X, pos.Y - size/2 - 15), lerpSpeed)
-                    nm.Color = Color3.new(1,1,1)
-                else nm.Visible = false end
-                
-                if Config.ESP_Health then
-                    hp.Visible = true
-                    local h = char.Humanoid.Health
-                    hp.Text = math.floor(h).." HP"
-                    hp.Position = hp.Position:Lerp(Vector2.new(pos.X, pos.Y + size/2 + 10), lerpSpeed)
-                    hp.Color = Color3.fromHSV(math.clamp(h/100, 0, 1) * 0.3, 1, 1)
-                else hp.Visible = false end
-                
-                return
+    if Config.TPAura then
+        if not CurrentTarget or not CurrentTarget.Parent or not CurrentTarget.Character or CurrentTarget.Character.Humanoid.Health <= 0 then
+            CurrentTarget = GetNextTarget()
+        end
+        if CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") then
+            local myHrp = lp.Character:FindFirstChild("HumanoidRootPart")
+            local enemyHrp = CurrentTarget.Character.HumanoidRootPart
+            if myHrp then
+                -- 根據偏移量計算 CFrame
+                myHrp.CFrame = enemyHrp.CFrame * CFrame.new(Config.Off_X, Config.Off_Y, Config.Off_Z)
+                myHrp.Velocity = Vector3.zero
             end
         end
-        
-        b.Visible = false; t.Visible = false; nm.Visible = false; hp.Visible = false
-        
-        if not target.Parent then
-            b:Remove(); t:Remove(); nm:Remove(); hp:Remove()
-            connection:Disconnect()
-        end
-    end)
-end
-
--- [[ 主循環 ]] --
-task.spawn(function()
-    r.Stepped:Connect(function() -- 使用 Stepped 處理 Noclip 最穩定
-        pcall(function()
-            -- [新增] 人物穿牆邏輯
-            if Config.Noclip and lp.Character then
-                for _, v in pairs(lp.Character:GetDescendants()) do
-                    if v:IsA("BasePart") and v.CanCollide then
-                        v.CanCollide = false
-                    end
-                end
-            end
-        end)
-    end)
-
-    while ScreenGui.Parent do
-        local cam = workspace.CurrentCamera
-        pcall(function()
-            if Config.Fly and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = lp.Character.HumanoidRootPart
-                local vel = Vector3.zero
-                if u:IsKeyDown(Enum.KeyCode.W) then vel += cam.CFrame.LookVector end
-                if u:IsKeyDown(Enum.KeyCode.S) then vel -= cam.CFrame.LookVector end
-                if u:IsKeyDown(Enum.KeyCode.A) then vel -= cam.CFrame.RightVector end
-                if u:IsKeyDown(Enum.KeyCode.D) then vel += cam.CFrame.RightVector end
-                if u:IsKeyDown(Enum.KeyCode.Space) then vel += Vector3.new(0, 1, 0) end
-                if u:IsKeyDown(Enum.KeyCode.LeftControl) then vel -= Vector3.new(0, 1, 0) end
-                hrp.Velocity = vel * Config.FlySpeed
-            end
-            if Config.Aimbot and u:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-                local target = nil; local dist = Config.FOV
-                for _, v in pairs(p:GetPlayers()) do
-                    if v ~= lp and v.Character and v.Character:FindFirstChild(Config.LockPart) then
-                        local head = v.Character[Config.LockPart]
-                        local sPos, on = cam:WorldToViewportPoint(head.Position)
-                        if on and v.Character.Humanoid.Health > 0 then
-                            local mag = (Vector2.new(sPos.X, sPos.Y) - u:GetMouseLocation()).Magnitude
-                            if mag < dist then
-                                if not Config.WallCheck or (#cam:GetPartsObscuringTarget({head.Position}, {lp.Character, v.Character}) == 0) then
-                                    dist = mag; target = sPos
-                                end
-                            end
-                        end
-                    end
-                end
-                if target then mousemoverel(target.X - u:GetMouseLocation().X, target.Y - u:GetMouseLocation().Y) end
-            end
-        end)
-        r.RenderStepped:Wait()
     end
 end)
 
-p.PlayerAdded:Connect(CreateESP)
+-- [[ 5. Aimbot / Fly / ESP 渲染 ]] --
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1.5; FOVCircle.Visible = false; FOVCircle.Color = Color3.new(1,1,1)
+
+r.RenderStepped:Connect(function()
+    FOVCircle.Visible = Config.ShowFOV
+    FOVCircle.Radius = Config.FOV
+    FOVCircle.Position = u:GetMouseLocation()
+    
+    if Config.Aimbot and u:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local targetPos = nil; local dist = Config.FOV
+        for _, v in pairs(p:GetPlayers()) do
+            if v ~= lp and v.Character and v.Character:FindFirstChild(Config.LockPart) then
+                local head = v.Character[Config.LockPart]
+                local sPos, on = cam:WorldToViewportPoint(head.Position)
+                if on and v.Character.Humanoid.Health > 0 then
+                    local mag = (Vector2.new(sPos.X, sPos.Y) - u:GetMouseLocation()).Magnitude
+                    if mag < dist then
+                        local canLock = false
+                        if Config.TPAura or not Config.WallCheck then canLock = true
+                        else
+                            local obs = cam:GetPartsObscuringTarget({head.Position}, {lp.Character, v.Character})
+                            if #obs == 0 then canLock = true end
+                        end
+                        if canLock then dist = mag; targetPos = sPos end
+                    end
+                end
+            end
+        end
+        if targetPos then mousemoverel(targetPos.X - u:GetMouseLocation().X, targetPos.Y - u:GetMouseLocation().Y) end
+    end
+
+    if Config.Fly and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = lp.Character.HumanoidRootPart
+        local vel = Vector3.zero
+        if u:IsKeyDown(Enum.KeyCode.W) then vel += cam.CFrame.LookVector end
+        if u:IsKeyDown(Enum.KeyCode.S) then vel -= cam.CFrame.LookVector end
+        if u:IsKeyDown(Enum.KeyCode.A) then vel -= cam.CFrame.RightVector end
+        if u:IsKeyDown(Enum.KeyCode.D) then vel += cam.CFrame.RightVector end
+        hrp.Velocity = vel * Config.FlySpeed
+    end
+end)
+
+-- [[ 6. ESP 創建與監聽 ]] --
+local function CreateESP(target)
+    if target == lp then return end
+    local b = Drawing.new("Square"); local nm = Drawing.new("Text"); local hp = Drawing.new("Text")
+    b.Thickness = 1; nm.Size = 13; nm.Center = true; nm.Outline = true; hp.Size = 13; hp.Center = true; hp.Outline = true
+    r.RenderStepped:Connect(function()
+        if target.Character and target.Character:FindFirstChild("HumanoidRootPart") and target.Character.Humanoid.Health > 0 then
+            local pos, on = cam:WorldToViewportPoint(target.Character.HumanoidRootPart.Position)
+            if on then
+                local size = 2500 / pos.Z
+                b.Visible = Config.ESP_Box; b.Size = Vector2.new(size, size*1.5); b.Position = Vector2.new(pos.X - size/2, pos.Y - size/2); b.Color = Color3.new(1,1,1)
+                nm.Visible = Config.ESP_Name; nm.Text = target.Name; nm.Position = Vector2.new(pos.X, pos.Y - size/2 - 15); nm.Color = Color3.new(1,1,1)
+                hp.Visible = Config.ESP_Health; local h = target.Character.Humanoid.Health
+                hp.Text = math.floor(h).." HP"; hp.Position = Vector2.new(pos.X, pos.Y + size/2 + 5); hp.Color = Color3.fromHSV(math.clamp(h/100, 0, 1) * 0.3, 1, 1)
+                return
+            end
+        end
+        b.Visible = false; nm.Visible = false; hp.Visible = false
+    end)
+end
+
 for _, v in pairs(p:GetPlayers()) do CreateESP(v) end
-u.InputBegan:Connect(function(i) if i.KeyCode == Config.MenuKey then Main.Visible = not Main.Visible end end)
+p.PlayerAdded:Connect(CreateESP)
+u.InputBegan:Connect(function(i, chat)
+    if chat then return end
+    if i.KeyCode == Enum.KeyCode.Q then CurrentTarget = GetNextTarget()
+    elseif i.KeyCode == Config.MenuKey then Main.Visible = not Main.Visible end
+end)

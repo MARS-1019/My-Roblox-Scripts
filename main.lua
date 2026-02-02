@@ -1,7 +1,9 @@
--- [[ MARS HUB V2 - FULL OFFSETS & HEAD SIT EDITION ]] --
+-- [[ MARS HUB V2 - INTEGRATED EDITION (FLY FIX + RAINBOW CROSSHAIR) ]] --
 if _G.MarsLoaded then 
     local old = game:GetService("CoreGui"):FindFirstChild("MarsHub_V2")
+    local oldCross = game:GetService("CoreGui"):FindFirstChild("CrazyCrosshair")
     if old then old:Destroy() end
+    if oldCross then oldCross:Destroy() end
 end
 _G.MarsLoaded = true
 
@@ -26,16 +28,64 @@ local Config = {
     Noclip = false,
     TPAura = false,
     -- 偏移量設定
-    Off_X = 0, -- 左右
-    Off_Y = 4, -- 高度
-    Off_Z = 0, -- 前後
-    MenuKey = Enum.KeyCode.Insert
+    Off_X = 0, 
+    Off_Y = 4, 
+    Off_Z = 0, 
+    MenuKey = Enum.KeyCode.Insert,
+    -- 準星設定
+    RainbowCrosshair = true
 }
 
 local CurrentTarget = nil
 local TargetIndex = 0
 
--- [[ 1. FPS 優化 ]] --
+-- [[ 1. 彩虹準星 (旋轉+伸縮) ]] --
+local function CreateRainbowCrosshair()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "CrazyCrosshair"
+    screenGui.Parent = cg
+    screenGui.IgnoreGuiInset = true
+
+    local holder = Instance.new("Frame")
+    holder.Size = UDim2.new(0, 0, 0, 0)
+    holder.Position = UDim2.new(0.5, 0, 0.5, 0)
+    holder.BackgroundTransparency = 1
+    holder.Parent = screenGui
+
+    local function createBar()
+        local bar = Instance.new("Frame")
+        bar.AnchorPoint = Vector2.new(0.5, 0.5)
+        bar.BorderSizePixel = 0
+        bar.Parent = holder
+        return bar
+    end
+
+    local t = createBar(); local b = createBar(); local l = createBar(); local r_bar = createBar()
+    local angle = 0
+
+    r.RenderStepped:Connect(function(dt)
+        if not Config.RainbowCrosshair then screenGui.Enabled = false return end
+        screenGui.Enabled = true
+        
+        angle = angle + (dt * 180)
+        holder.Rotation = angle
+        
+        local hue = tick() % 2 / 2
+        local color = Color3.fromHSV(hue, 1, 1)
+        
+        local breathe = (math.sin(tick() * 5) + 1) / 2
+        local length = 5 + (breathe * 15)
+        local gap = 5 + (breathe * 5)
+        local thickness = 2
+
+        t.Size = UDim2.new(0, thickness, 0, length); t.Position = UDim2.new(0, 0, 0, -gap - (length/2)); t.BackgroundColor3 = color
+        b.Size = UDim2.new(0, thickness, 0, length); b.Position = UDim2.new(0, 0, 0, gap + (length/2)); b.BackgroundColor3 = color
+        l.Size = UDim2.new(0, length, 0, thickness); l.Position = UDim2.new(0, -gap - (length/2), 0, 0); l.BackgroundColor3 = color
+        r_bar.Size = UDim2.new(0, length, 0, thickness); r_bar.Position = UDim2.new(0, gap + (length/2), 0, 0); r_bar.BackgroundColor3 = color
+    end)
+end
+
+-- [[ 2. FPS 優化 ]] --
 local function BoostFPS()
     settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
     for _, v in pairs(game:GetDescendants()) do
@@ -53,7 +103,7 @@ local function BoostFPS()
     game:GetService("Lighting").GlobalShadows = false
 end
 
--- [[ 2. 目標獲取邏輯 ]] --
+-- [[ 3. 目標獲取邏輯 ]] --
 local function GetNextTarget()
     local targetList = {}
     for _, v in pairs(p:GetPlayers()) do
@@ -66,17 +116,17 @@ local function GetNextTarget()
     return targetList[TargetIndex]
 end
 
--- [[ 3. UI 介面核心 ]] --
+-- [[ 4. UI 介面核心 ]] --
 local ScreenGui = Instance.new("ScreenGui", cg); ScreenGui.Name = "MarsHub_V2"
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 260, 0, 550); Main.Position = UDim2.new(0.1, 0, 0.2, 0); Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15); Main.Active = true; Main.Draggable = true
+Main.Size = UDim2.new(0, 260, 0, 580); Main.Position = UDim2.new(0.1, 0, 0.2, 0); Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15); Main.Active = true; Main.Draggable = true
 Instance.new("UICorner", Main)
 
-local Container = Instance.new("ScrollingFrame", Main); Container.Size = UDim2.new(1, -20, 1, -60); Container.Position = UDim2.new(0, 10, 0, 50); Container.BackgroundTransparency = 1; Container.CanvasSize = UDim2.new(0, 0, 2.5, 0); Container.ScrollBarThickness = 0
+local Container = Instance.new("ScrollingFrame", Main); Container.Size = UDim2.new(1, -20, 1, -60); Container.Position = UDim2.new(0, 10, 0, 50); Container.BackgroundTransparency = 1; Container.CanvasSize = UDim2.new(0, 0, 2.8, 0); Container.ScrollBarThickness = 0
 Instance.new("UIListLayout", Container).Padding = UDim.new(0, 8)
 
 local function AddToggle(text, configKey)
-    local Btn = Instance.new("TextButton", Container); Btn.Size = UDim2.new(1, 0, 0, 30); Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 40); Btn.Text = text .. ": OFF"; Btn.TextColor3 = Color3.new(0.8, 0.8, 0.8); Btn.Font = Enum.Font.Gotham; Instance.new("UICorner", Btn)
+    local Btn = Instance.new("TextButton", Container); Btn.Size = UDim2.new(1, 0, 0, 30); Btn.BackgroundColor3 = Config[configKey] and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(35, 35, 40); Btn.Text = text .. ": " .. (Config[configKey] and "ON" or "OFF"); Btn.TextColor3 = Color3.new(0.8, 0.8, 0.8); Btn.Font = Enum.Font.Gotham; Instance.new("UICorner", Btn)
     Btn.MouseButton1Click:Connect(function()
         Config[configKey] = not Config[configKey]
         Btn.Text = text .. ": " .. (Config[configKey] and "ON" or "OFF")
@@ -97,26 +147,24 @@ local function AddButton(text, callback)
     Btn.MouseButton1Click:Connect(callback)
 end
 
--- UI 功能元件
 AddButton("🚀 BOOST FPS", BoostFPS)
-AddToggle("TP AURA (全方位貼身)", "TPAura")
-AddSlider("左右偏移 (L/R)", -10, 10, "Off_X")
-AddSlider("高度偏移 (Up/Down)", -10, 10, "Off_Y")
-AddSlider("前後偏移 (F/B)", -10, 10, "Off_Z")
-AddToggle("Noclip (穿牆必開)", "Noclip")
-AddToggle("Silent Lock (瞄準)", "Aimbot")
+AddToggle("RAINBOW CROSSHAIR", "RainbowCrosshair")
+AddToggle("TP AURA", "TPAura")
+AddSlider("L/R Offset", -10, 10, "Off_X")
+AddSlider("Up/Down Offset", -10, 10, "Off_Y")
+AddSlider("F/B Offset", -10, 10, "Off_Z")
+AddToggle("Noclip", "Noclip")
+AddToggle("Fly Mode", "Fly")
+AddSlider("Fly Speed", 10, 500, "FlySpeed")
+AddToggle("Aimbot", "Aimbot")
 AddToggle("Wall Check", "WallCheck")
-AddSlider("Aimbot FOV", 50, 800, "FOV")
+AddSlider("FOV", 50, 800, "FOV")
 AddToggle("Show FOV", "ShowFOV")
 AddToggle("ESP Box", "ESP_Box")
 AddToggle("ESP Name", "ESP_Name")
 AddToggle("ESP Health", "ESP_Health")
-AddToggle("Fly Mode", "Fly")
-AddSlider("Fly Speed", 10, 500, "FlySpeed")
 
-local Tip = Instance.new("TextLabel", Container); Tip.Size = UDim2.new(1, 0, 0, 40); Tip.Text = "按 [Q] 切換目標\n按 [Insert] 隱藏菜單"; Tip.TextColor3 = Color3.new(1, 1, 0); Tip.BackgroundTransparency = 1
-
--- [[ 4. 核心功能循環 ]] --
+-- [[ 5. 核心循環 ]] --
 r.Stepped:Connect(function()
     if Config.Noclip and lp.Character then
         for _, v in pairs(lp.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
@@ -128,17 +176,14 @@ r.Stepped:Connect(function()
         end
         if CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") then
             local myHrp = lp.Character:FindFirstChild("HumanoidRootPart")
-            local enemyHrp = CurrentTarget.Character.HumanoidRootPart
             if myHrp then
-                -- 根據偏移量計算 CFrame
-                myHrp.CFrame = enemyHrp.CFrame * CFrame.new(Config.Off_X, Config.Off_Y, Config.Off_Z)
+                myHrp.CFrame = CurrentTarget.Character.HumanoidRootPart.CFrame * CFrame.new(Config.Off_X, Config.Off_Y, Config.Off_Z)
                 myHrp.Velocity = Vector3.zero
             end
         end
     end
 end)
 
--- [[ 5. Aimbot / Fly / ESP 渲染 ]] --
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 1.5; FOVCircle.Visible = false; FOVCircle.Color = Color3.new(1,1,1)
 
@@ -147,6 +192,7 @@ r.RenderStepped:Connect(function()
     FOVCircle.Radius = Config.FOV
     FOVCircle.Position = u:GetMouseLocation()
     
+    -- Aimbot 邏輯
     if Config.Aimbot and u:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local targetPos = nil; local dist = Config.FOV
         for _, v in pairs(p:GetPlayers()) do
@@ -156,13 +202,9 @@ r.RenderStepped:Connect(function()
                 if on and v.Character.Humanoid.Health > 0 then
                     local mag = (Vector2.new(sPos.X, sPos.Y) - u:GetMouseLocation()).Magnitude
                     if mag < dist then
-                        local canLock = false
-                        if Config.TPAura or not Config.WallCheck then canLock = true
-                        else
-                            local obs = cam:GetPartsObscuringTarget({head.Position}, {lp.Character, v.Character})
-                            if #obs == 0 then canLock = true end
+                        if Config.TPAura or not Config.WallCheck or #cam:GetPartsObscuringTarget({head.Position}, {lp.Character, v.Character}) == 0 then
+                            dist = mag; targetPos = sPos
                         end
-                        if canLock then dist = mag; targetPos = sPos end
                     end
                 end
             end
@@ -170,18 +212,26 @@ r.RenderStepped:Connect(function()
         if targetPos then mousemoverel(targetPos.X - u:GetMouseLocation().X, targetPos.Y - u:GetMouseLocation().Y) end
     end
 
+    -- 修改後的飛行控制 (Space 上升 / Ctrl 下降)
     if Config.Fly and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = lp.Character.HumanoidRootPart
-        local vel = Vector3.zero
-        if u:IsKeyDown(Enum.KeyCode.W) then vel += cam.CFrame.LookVector end
-        if u:IsKeyDown(Enum.KeyCode.S) then vel -= cam.CFrame.LookVector end
-        if u:IsKeyDown(Enum.KeyCode.A) then vel -= cam.CFrame.RightVector end
-        if u:IsKeyDown(Enum.KeyCode.D) then vel += cam.CFrame.RightVector end
-        hrp.Velocity = vel * Config.FlySpeed
+        local moveVec = Vector3.zero
+        if u:IsKeyDown(Enum.KeyCode.W) then moveVec += cam.CFrame.LookVector end
+        if u:IsKeyDown(Enum.KeyCode.S) then moveVec -= cam.CFrame.LookVector end
+        if u:IsKeyDown(Enum.KeyCode.A) then moveVec -= cam.CFrame.RightVector end
+        if u:IsKeyDown(Enum.KeyCode.D) then moveVec += cam.CFrame.RightVector end
+        if u:IsKeyDown(Enum.KeyCode.Space) then moveVec += Vector3.new(0, 1, 0) end
+        if u:IsKeyDown(Enum.KeyCode.LeftControl) then moveVec -= Vector3.new(0, 1, 0) end
+        
+        if moveVec.Magnitude > 0 then
+            hrp.Velocity = moveVec.Unit * Config.FlySpeed
+        else
+            hrp.Velocity = Vector3.zero
+        end
     end
 end)
 
--- [[ 6. ESP 創建與監聽 ]] --
+-- [[ 6. ESP 與 初始化 ]] --
 local function CreateESP(target)
     if target == lp then return end
     local b = Drawing.new("Square"); local nm = Drawing.new("Text"); local hp = Drawing.new("Text")
@@ -209,3 +259,5 @@ u.InputBegan:Connect(function(i, chat)
     if i.KeyCode == Enum.KeyCode.Q then CurrentTarget = GetNextTarget()
     elseif i.KeyCode == Config.MenuKey then Main.Visible = not Main.Visible end
 end)
+
+CreateRainbowCrosshair() -- 啟動準星
